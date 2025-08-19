@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Life Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom Styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark Gray-Blue */
+            color: #e5e7eb; /* Light Gray */
+            overflow-x: hidden;
+        }
+
+        /* Custom scrollbar for a modern look */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+        /* Day switcher button styles */
+        .day-btn {
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+        }
+        .day-btn.active {
+            color: #3b82f6; /* Blue */
+            border-bottom-color: #3b82f6;
+        }
+        
+        /* Current time indicator */
+        #time-indicator {
+            position: absolute;
+            width: calc(100% + 2rem);
+            left: -1rem;
+            height: 2px;
+            background: #ef4444; /* Red */
+            z-index: 10;
+            transition: top 1s linear;
+            opacity: 0; /* Initially hidden */
+        }
+        #time-indicator::before {
+            content: '';
+            position: absolute;
+            left: -4px;
+            top: -3px;
+            width: 8px;
+            height: 8px;
+            background: #ef4444;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #ef4444;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Current task highlight */
+        .current-task {
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+            border: 1px solid #3b82f6;
+        }
+
+        /* Custom checkbox styling */
+        .task-checkbox {
+            appearance: none;
+            background-color: transparent;
+            border: 2px solid #4b5563;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        .task-checkbox:checked {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+        }
+        .task-checkbox:checked::after {
+            content: '✔';
+            color: #fff;
+            font-size: 12px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .task-item.completed .task-text {
+            text-decoration: line-through;
+            opacity: 0.5;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.7);
+        }
+        .modal-content {
+            background-color: #1f2937;
+            margin: 10% auto;
+            padding: 2rem;
+            border: 1px solid #4b5563;
+            width: 90%;
+            max-width: 500px;
+            border-radius: 0.5rem;
+        }
+
+        /* Progress Bar */
+        .progress-bar-bg {
+            background-color: #374151;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .progress-bar {
+            background-color: #3b82f6;
+            height: 100%;
+            border-radius: 0.5rem;
+            transition: width 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-6 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-white">My Life Dashboard</h1>
+            <p id="current-date-time" class="text-lg text-gray-400 mt-2"></p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column: Focus & Goals -->
+            <aside class="lg:col-span-1 space-y-8">
+                <!-- Today's Focus -->
+                <div id="today-focus" class="bg-gray-900 rounded-lg p-6 shadow-lg">
+                    <h2 class="text-2xl font-bold text-white mb-4">Today's Focus</h2>
+                    <div id="focus-content" class="space-y-4">
+                        <!-- Content injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Weekly Goals -->
+                <div class="bg-gray-900 rounded-lg p-6 shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold text-white">Weekly Goals</h2>
+                        <button id="add-goal-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-full text-sm">+</button>
+                    </div>
+                    <div id="weekly-goals-list" class="space-y-4">
+                        <!-- Goals injected by JS -->
+                    </div>
+                </div>
+
+                 <!-- Weekly Review Button -->
+                <div class="bg-gray-900 rounded-lg p-6 shadow-lg text-center">
+                    <button id="show-analytics-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
+                        Show Weekly Review
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Right Column: Schedule -->
+            <div class="lg:col-span-2">
+                <!-- Day Switcher -->
+                <nav class="flex justify-center border-b border-gray-700 mb-8">
+                    <div id="day-switcher" class="flex space-x-4 sm:space-x-8 overflow-x-auto pb-2">
+                        <!-- Buttons will be injected by JS -->
+                    </div>
+                </nav>
+
+                <!-- Main Content -->
+                <main id="schedule-container">
+                    <!-- Daily schedules will be injected by JS -->
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Modal -->
+    <div id="task-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-2xl font-bold text-white mb-6">Add Task</h3>
+            <form id="task-form">
+                <input type="hidden" id="task-id">
+                <input type="hidden" id="task-day">
+                <div class="mb-4">
+                    <label for="task-input" class="block text-sm font-medium text-gray-300 mb-1">Task</label>
+                    <input type="text" id="task-input" class="w-full bg-gray-800 border border-gray-700 rounded-md p-2 text-gray-300" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label for="start-time-input" class="block text-sm font-medium text-gray-300 mb-1">Start Time</label>
+                        <input type="time" id="start-time-input" class="w-full bg-gray-800 border border-gray-700 rounded-md p-2 text-gray-300" required>
+                    </div>
+                    <div>
+                        <label for="end-time-input" class="block text-sm font-medium text-gray-300 mb-1">End Time</label>
+                        <input type="time" id="end-time-input" class="w-full bg-gray-800 border border-gray-700 rounded-md p-2 text-gray-300" required>
+                    </div>
+                </div>
+                 <div class="mb-4">
+                    <label for="task-goal-link" class="block text-sm font-medium text-gray-300 mb-1">Link to Goal</label>
+                    <select id="task-goal-link" class="w-full bg-gray-800 border border-gray-700 rounded-md p-2 text-gray-300">
+                        <option value="">None</option>
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="cancel-task-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Cancel</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save Task</button>
+                    <button type="button" id="delete-task-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg hidden">Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Analytics Modal -->
+    <div id="analytics-modal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-2xl font-bold text-white mb-6">Weekly Review</h3>
+            <div id="analytics-content" class="space-y-6">
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <p class="text-lg font-semibold">Overall Completion</p>
+                    <p id="overall-completion" class="text-3xl font-bold text-blue-400"></p>
+                </div>
+                <div>
+                    <canvas id="time-distribution-chart"></canvas>
+                </div>
+                 <div>
+                    <canvas id="daily-productivity-chart"></canvas>
+                </div>
+            </div>
+            <div class="flex justify-end mt-6">
+                <button type="button" id="close-analytics-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Close</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DATA ---
+            const initialSchedule = {
+                monday: [
+                    { time: '6:00 AM - 6:15 AM', task: 'Morning routine', completed: false, goalId: null },
+                    { time: '6:15 AM - 7:30 AM', task: 'Studies', completed: false, goalId: null },
+                    { time: '7:30 AM - 8:00 AM', task: 'Breakfast', completed: false, goalId: null },
+                    { time: '8:00 AM - 2:00 PM', task: 'Classes', completed: false, goalId: null },
+                    { time: '2:00 PM - 2:30 PM', task: 'Break / Settle', completed: false, goalId: null },
+                    { time: '2:30 PM - 3:00 PM', task: 'Nap (20-30 min)', completed: false, goalId: null },
+                    { time: '3:00 PM - 4:00 PM', task: 'Core DSA solving', completed: false, goalId: null },
+                    { time: '4:00 PM - 5:30 PM', task: 'Gym (Optional)', completed: false, goalId: null },
+                    { time: '5:30 PM - 6:00 PM', task: 'Return / Settle', completed: false, goalId: null },
+                    { time: '6:00 PM - 8:00 PM', task: 'Study session', completed: false, goalId: null },
+                    { time: '8:00 PM - 9:00 PM', task: 'Dinner & Cybersecurity practice', completed: false, goalId: null },
+                    { time: '9:00 PM - 11:00 PM', task: 'College studies & Checklist', completed: false, goalId: null },
+                    { time: '11:00 PM - 11:30 PM', task: 'Sleep', completed: false, goalId: null },
+                ],
+                tuesday: [
+                    { time: '6:00 AM - 6:15 AM', task: 'Morning routine', completed: false, goalId: null },
+                    { time: '6:15 AM - 7:30 AM', task: 'Studies', completed: false, goalId: null },
+                    { time: '7:30 AM - 10:00 AM', task: 'Breakfast & Free Time', completed: false, goalId: null },
+                    { time: '10:00 AM - 1:00 PM', task: 'Classes', completed: false, goalId: null },
+                    { time: '1:00 PM - 2:45 PM', task: 'Lunch Break & Nap', completed: false, goalId: null },
+                    { time: '2:45 PM - 3:15 PM', task: 'Prepare for Class', completed: false, goalId: null },
+                    { time: '3:15 PM - 5:15 PM', task: 'Classes', completed: false, goalId: null },
+                    { time: '5:15 PM - 6:00 PM', task: 'Free Time / Settle', completed: false, goalId: null },
+                    { time: '6:00 PM - 8:00 PM', task: 'Study session', completed: false, goalId: null },
+                    { time: '8:00 PM - 9:00 PM', task: 'Dinner & Cybersecurity practice', completed: false, goalId: null },
+                    { time: '9:00 PM - 11:00 PM', task: 'College studies & Checklist', completed: false, goalId: null },
+                    { time: '11:00 PM - 11:30 PM', task: 'Sleep', completed: false, goalId: null },
+                ],
+                wednesday: [
+                    { time: '6:00 AM - 6:15 AM', task: 'Morning routine', completed: false, goalId: null },
+                    { time: '6:15 AM - 7:30 AM', task: 'Studies', completed: false, goalId: null },
+                    { time: '7:30 AM - 8:00 AM', task: 'Breakfast', completed: false, goalId: null },
+                    { time: '8:00 AM - 11:00 AM', task: 'Classes', completed: false, goalId: null },
+                    { time: '11:00 AM - 1:00 PM', task: 'Free Time / Lunch', completed: false, goalId: null },
+                    { time: '1:00 PM - 2:00 PM', task: 'Classes', completed: false, goalId: null },
+                    { time: '2:00 PM - 3:00 PM', task: 'Break & Nap', completed: false, goalId: null },
+                    { time: '3:00 PM - 4:00 PM', task: 'Core DSA solving', completed: false, goalId: null },
+                    { time: '4:00 PM - 5:30 PM', task: 'Gym', completed: false, goalId: null },
+                    { time: '5:30 PM - 6:00 PM', task: 'Return / Settle', completed: false, goalId: null },
+                    { time: '6:00 PM - 8:00 PM', task: 'Study session', completed: false, goalId: null },
+                    { time: '8:00 PM - 9:00 PM', task: 'Dinner & Cybersecurity practice', completed: false, goalId: null },
+                    { time: '9:00 PM - 11:00 PM', task: 'College studies & Checklist', completed: false, goalId: null },
+                    { time: '11:00 PM - 11:30 PM', task: 'Sleep', completed: false, goalId: null },
+                ],
+                thursday: [
+                    { time: '6:00 AM - 6:15 AM', task: 'Morning routine', completed: false, goalId: null },
+                    { time: '6:15 AM - 7:30 AM', task: 'Studies', completed: false, goalId: null },
+                    { time: '7:30 AM - 8:00 AM', task: 'Breakfast', completed: false, goalId: null },
+                    { time: '8:00 AM - 12:00 PM', task: 'Classes', completed: false, goalId: null },
+                    { time: '12:00 PM - 2:30 PM', task: 'Lunch & Break', completed: false, goalId: null },
+                    { time: '2:30 PM - 3:00 PM', task: 'Nap (20-30 min)', completed: false, goalId: null },
+                    { time: '3:00 PM - 4:00 PM', task: 'Core DSA solving', completed: false, goalId: null },
+                    { time: '4:00 PM - 5:30 PM', task: 'Gym', completed: false, goalId: null },
+                    { time: '5:30 PM - 6:00 PM', task: 'Return / Settle', completed: false, goalId: null },
+                    { time: '6:00 PM - 8:00 PM', task: 'Study session', completed: false, goalId: null },
+                    { time: '8:00 PM - 9:00 PM', task: 'Dinner & Cybersecurity practice', completed: false, goalId: null },
+                    { time: '9:00 PM - 11:00 PM', task: 'College studies & Checklist', completed: false, goalId: null },
+                    { time: '11:00 PM - 11:30 PM', task: 'Sleep', completed: false, goalId: null },
+                ],
+                friday: [
+                    { time: '6:00 AM - 6:15 AM', task: 'Morning routine', completed: false, goalId: null },
+                    { time: '6:15 AM - 7:30 AM', task: 'Studies', completed: false, goalId: null },
+                    { time: '7:30 AM - 8:00 AM', task: 'Breakfast', completed: false, goalId: null },
+                    { time: '8:00 AM - 1:00 PM', task: 'Classes', completed: false, goalId: null },
+                    { time: '1:00 PM - 2:30 PM', task: 'Lunch & Break', completed: false, goalId: null },
+                    { time: '2:30 PM - 3:00 PM', task: 'Nap (20-30 min)', completed: false, goalId: null },
+                    { time: '3:00 PM - 4:00 PM', task: 'Core DSA solving', completed: false, goalId: null },
+                    { time: '4:00 PM - 5:30 PM', task: 'Gym (Optional)', completed: false, goalId: null },
+                    { time: '5:30 PM - 6:00 PM', task: 'Return / Settle', completed: false, goalId: null },
+                    { time: '6:00 PM - 8:00 PM', task: 'Study session', completed: false, goalId: null },
+                    { time: '8:00 PM - 9:00 PM', task: 'Dinner & Cybersecurity practice', completed: false, goalId: null },
+                    { time: '9:00 PM - 11:00 PM', task: 'College studies & Checklist', completed: false, goalId: null },
+                    { time: '11:00 PM - 11:30 PM', task: 'Sleep', completed: false, goalId: null },
+                ],
+                saturday: [
+                    { time: '6:00 AM - 6:15 AM', task: 'Morning routine', completed: false, goalId: null },
+                    { time: '6:15 AM - 7:30 AM', task: 'Studies', completed: false, goalId: null },
+                    { time: '7:30 AM - 8:00 AM', task: 'Breakfast', completed: false, goalId: null },
+                    { time: '8:00 AM - 12:00 PM', task: 'Cyber CTF / Projects & Job Apps', completed: false, goalId: null },
+                    { time: '12:00 PM - 2:00 PM', task: 'Focus on DSA study', completed: false, goalId: null },
+                    { time: '2:00 PM - 3:00 PM', task: 'Lunch & Nap', completed: false, goalId: null },
+                    { time: '3:00 PM - 4:00 PM', task: 'Core DSA solving', completed: false, goalId: null },
+                    { time: '4:00 PM - 5:30 PM', task: 'Gym', completed: false, goalId: null },
+                    { time: '5:30 PM - 6:00 PM', task: 'Return / Settle', completed: false, goalId: null },
+                    { time: '6:00 PM - 8:00 PM', task: 'Study session', completed: false, goalId: null },
+                    { time: '8:00 PM - 9:00 PM', task: 'Dinner & Cybersecurity practice', completed: false, goalId: null },
+                    { time: '9:00 PM - 11:00 PM', task: 'College studies, Checklist & Accountability', completed: false, goalId: null },
+                    { time: '11:00 PM - 11:30 PM', task: 'Sleep', completed: false, goalId: null },
+                ],
+                sunday: [
+                    { time: '6:00 AM - 6:15 AM', task: 'Morning routine', completed: false, goalId: null },
+                    { time: '6:15 AM - 7:30 AM', task: 'Studies', completed: false, goalId: null },
+                    { time: '7:30 AM - 8:00 AM', task: 'Breakfast', completed: false, goalId: null },
+                    { time: '8:00 AM - 12:00 PM', task: 'Cyber CTF / Projects & Job Apps', completed: false, goalId: null },
+                    { time: '12:00 PM - 2:00 PM', task: 'Focus on DSA study', completed: false, goalId: null },
+                    { time: '2:00 PM - 3:00 PM', task: 'Lunch & Nap', completed: false, goalId: null },
+                    { time: '3:00 PM - 4:00 PM', task: 'Core DSA solving', completed: false, goalId: null },
+                    { time: '4:00 PM - 5:30 PM', task: 'Gym', completed: false, goalId: null },
+                    { time: '5:30 PM - 6:00 PM', task: 'Return / Settle', completed: false, goalId: null },
+                    { time: '6:00 PM - 8:00 PM', task: 'Study session', completed: false, goalId: null },
+                    { time: '8:00 PM - 9:00 PM', task: 'Dinner & Cybersecurity practice', completed: false, goalId: null },
+                    { time: '9:00 PM - 11:00 PM', task: 'College studies, Checklist & Accountability', completed: false, goalId: null },
+                    { time: '11:00 PM - 11:30 PM', task: 'Sleep', completed: false, goalId: null },
+                ],
+            };
+
+            const initialGoals = [
+                { id: 1, text: 'Ace Technical Interviews', completed: false },
+                { id: 2, text: 'Master Cybersecurity Fundamentals', completed: false },
+                { id: 3, text: 'Maintain Physical Fitness', completed: false }
+            ];
+
+            let scheduleData = JSON.parse(localStorage.getItem('scheduleData')) || initialSchedule;
+            let weeklyGoals = JSON.parse(localStorage.getItem('weeklyGoals')) || initialGoals;
+
+            const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+            // --- DOM Elements ---
+            const dateTimeElement = document.getElementById('current-date-time');
+            const daySwitcherElement = document.getElementById('day-switcher');
+            const scheduleContainerElement = document.getElementById('schedule-container');
+            const taskModal = document.getElementById('task-modal');
+            const taskForm = document.getElementById('task-form');
+            const modalTitle = document.getElementById('modal-title');
+            const weeklyGoalsList = document.getElementById('weekly-goals-list');
+            const focusContent = document.getElementById('focus-content');
+            const analyticsModal = document.getElementById('analytics-modal');
+
+            // --- UTILITY Functions ---
+            const saveState = () => {
+                localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
+                localStorage.setItem('weeklyGoals', JSON.stringify(weeklyGoals));
+            };
+
+            const timeToMinutes = (timeStr) => {
+                if (!timeStr) return 24 * 60; // Return end of day if time is undefined
+                const parts = timeStr.trim().split(' ');
+                const time = parts[0];
+                const modifier = parts[1];
+                let [hours, minutes] = time.split(':').map(Number);
+                if (modifier === 'PM' && hours < 12) hours += 12;
+                if (modifier === 'AM' && hours === 12) hours = 0;
+                return hours * 60 + minutes;
+            };
+             const minutesTo12HourFormat = (h, m) => {
+                const period = h >= 12 ? 'PM' : 'AM';
+                const hour = h % 12 || 12;
+                const minute = m < 10 ? `0${m}` : m;
+                return `${hour}:${minute} ${period}`;
+            };
+            const timeInputTo12Hour = (timeValue) => {
+                if(!timeValue) return '';
+                let [hours, minutes] = timeValue.split(':').map(Number);
+                return minutesTo12HourFormat(hours, minutes);
+            }
+
+            // --- RENDER Functions ---
+            const renderAll = () => {
+                renderDaySwitcher();
+                renderAllSchedules();
+                renderGoals();
+                const today = daysOfWeek[new Date().getDay()];
+                switchDay(today);
+                updateFocusView();
+            };
+
+            const renderDaySwitcher = () => {
+                daySwitcherElement.innerHTML = daysOfWeek.slice(1).concat(daysOfWeek[0]).map(day => `
+                    <button class="day-btn text-gray-400 hover:text-white py-2 px-1 text-sm sm:text-base" data-day="${day}">
+                        ${day.charAt(0).toUpperCase() + day.slice(1)}
+                    </button>
+                `).join('');
+            };
+
+            const renderAllSchedules = () => {
+                scheduleContainerElement.innerHTML = daysOfWeek.map(day => {
+                    // Ensure the schedule for the day exists and sort it
+                    if (!scheduleData[day]) scheduleData[day] = [];
+                    scheduleData[day].sort((a, b) => timeToMinutes(a.time.split(' - ')[0]) - timeToMinutes(b.time.split(' - ')[0]));
+                    const dayData = scheduleData[day];
+
+                    const tasksHtml = dayData.map((item, index) => {
+                        const goal = weeklyGoals.find(g => g.id === item.goalId);
+                        return `
+                            <div class="task-item flex items-start space-x-4 p-3 rounded-lg border border-transparent ${item.completed ? 'completed' : ''}" data-day="${day}" data-index="${index}">
+                                <input type="checkbox" class="task-checkbox mt-1 flex-shrink-0" ${item.completed ? 'checked' : ''}>
+                                <div class="flex-grow cursor-pointer task-details">
+                                    <p class="font-semibold text-white task-text">${item.task}</p>
+                                    <p class="text-sm text-gray-400">${item.time}</p>
+                                    ${goal ? `<p class="text-xs text-blue-400 mt-1">Goal: ${goal.text}</p>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    return `
+                        <div class="day-schedule bg-gray-900 rounded-lg p-6 shadow-lg" data-day="${day}" style="display: none;">
+                             <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-xl font-semibold text-white">${day.charAt(0).toUpperCase() + day.slice(1)}'s Schedule</h3>
+                                <button class="add-task-btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-full text-sm" data-day="${day}">+ Add Task</button>
+                            </div>
+                            <div class="relative timeline border-l-2 border-gray-700 pl-8">
+                                <div id="time-indicator"></div>
+                                <div class="space-y-2">
+                                    ${tasksHtml || '<p class="text-gray-500">No tasks for today. Add one!</p>'}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            };
+
+            const renderGoals = () => {
+                weeklyGoalsList.innerHTML = weeklyGoals.map((goal, index) => `
+                    <div class="goal-item flex items-center justify-between bg-gray-800 p-3 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" class="goal-checkbox" data-id="${goal.id}" ${goal.completed ? 'checked' : ''}>
+                            <input type="text" value="${goal.text}" class="goal-text-input bg-transparent text-white w-full" data-id="${goal.id}">
+                        </div>
+                        <button class="delete-goal-btn text-red-500 hover:text-red-400 font-bold" data-id="${goal.id}">&times;</button>
+                    </div>
+                `).join('');
+                updateGoalProgress();
+            };
+            
+            const updateGoalProgress = () => {
+                weeklyGoals.forEach(goal => {
+                    const linkedTasks = Object.values(scheduleData).flat().filter(task => task.goalId === goal.id);
+                    const completedTasks = linkedTasks.filter(task => task.completed);
+                    const progress = linkedTasks.length > 0 ? (completedTasks.length / linkedTasks.length) * 100 : 0;
+                    const goalElement = weeklyGoalsList.querySelector(`[data-id="${goal.id}"]`)?.closest('.goal-item');
+                    if (goalElement) {
+                        let progressBar = goalElement.querySelector('.progress-bar-bg');
+                        if (!progressBar) {
+                            progressBar = document.createElement('div');
+                            progressBar.className = 'progress-bar-bg h-2 w-full mt-2';
+                            progressBar.innerHTML = `<div class="progress-bar h-2"></div>`;
+                            goalElement.appendChild(progressBar);
+                        }
+                        progressBar.querySelector('.progress-bar').style.width = `${progress}%`;
+                    }
+                });
+            };
+
+            const updateFocusView = () => {
+                const now = new Date();
+                const currentDay = daysOfWeek[now.getDay()];
+                const daySchedule = scheduleData[currentDay] || [];
+                const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+                let currentTask = null;
+                let nextTask = null;
+
+                // Use the already sorted daySchedule
+                for (const task of daySchedule) {
+                    const [startTimeStr, endTimeStr] = task.time.split(' - ');
+                    const startTime = timeToMinutes(startTimeStr);
+                    const endTime = endTimeStr ? timeToMinutes(endTimeStr) : startTime + 60;
+
+                    if (currentMinutes >= startTime && currentMinutes < endTime) {
+                        currentTask = task;
+                    }
+                    if (currentMinutes < startTime && !nextTask) {
+                        nextTask = task;
+                    }
+                }
+                
+                let focusHtml = '';
+                focusHtml += `
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold text-gray-400 mb-1">CURRENT TASK</h4>
+                        <p class="text-lg text-white">${currentTask ? `${currentTask.task} (${currentTask.time})` : 'No current task.'}</p>
+                    </div>
+                `;
+                focusHtml += `
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold text-gray-400 mb-1">UP NEXT</h4>
+                        <p class="text-lg text-white">${nextTask ? `${nextTask.task} (${nextTask.time})` : 'No upcoming tasks.'}</p>
+                    </div>
+                `;
+                focusHtml += `<h4 class="text-lg font-semibold text-white pt-4">Goal Progress</h4>`;
+                focusHtml += weeklyGoals.map(goal => {
+                    const linkedTasks = Object.values(scheduleData).flat().filter(task => task.goalId === goal.id);
+                    const completedTasks = linkedTasks.filter(task => task.completed);
+                    const progress = linkedTasks.length > 0 ? (completedTasks.length / linkedTasks.length) * 100 : 0;
+                    return `
+                        <div>
+                            <p class="text-sm text-gray-300">${goal.text}</p>
+                            <div class="progress-bar-bg h-2.5 w-full mt-1">
+                                <div class="progress-bar h-2.5" style="width: ${progress}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                focusContent.innerHTML = focusHtml;
+            };
+
+            // --- CORE LOGIC Functions ---
+            const updateDateTime = () => {
+                const now = new Date();
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+                dateTimeElement.textContent = now.toLocaleDateString('en-US', options);
+            };
+
+            const updateTimeIndicator = () => {
+                const now = new Date();
+                const currentDay = daysOfWeek[now.getDay()];
+                const activeDayElement = document.querySelector(`.day-schedule[data-day="${currentDay}"]`);
+
+                if (activeDayElement && activeDayElement.style.display !== 'none') {
+                    const indicator = activeDayElement.querySelector('#time-indicator');
+                    const startOfDay = new Date();
+                    startOfDay.setHours(6, 0, 0, 0); // Schedule starts at 6 AM
+                    const endOfDay = new Date();
+                    endOfDay.setHours(23, 30, 0, 0); // Schedule ends at 11:30 PM
+                    
+                    const totalMinutesInDay = (endOfDay - startOfDay) / (1000 * 60);
+                    const elapsedMinutes = (now - startOfDay) / (1000 * 60);
+
+                    if (elapsedMinutes >= 0 && elapsedMinutes <= totalMinutesInDay) {
+                        const percentage = (elapsedMinutes / totalMinutesInDay) * 100;
+                        indicator.style.top = `${percentage}%`;
+                        indicator.style.opacity = '1';
+                    } else {
+                        indicator.style.opacity = '0';
+                    }
+
+                    // Highlight current task
+                    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                    document.querySelectorAll('.current-task').forEach(el => el.classList.remove('current-task'));
+                    activeDayElement.querySelectorAll('.task-item').forEach(item => {
+                        const day = item.dataset.day;
+                        const index = item.dataset.index;
+                        const taskData = scheduleData[day][index]; // This is now safe because the main array is sorted
+                        if (taskData) {
+                            const [startTimeStr, endTimeStr] = taskData.time.split(' - ');
+                            const startTime = timeToMinutes(startTimeStr);
+                            const endTime = endTimeStr ? timeToMinutes(endTimeStr) : startTime + 60;
+                            if (currentMinutes >= startTime && currentMinutes < endTime) {
+                                item.classList.add('current-task');
+                            }
+                        }
+                    });
+                }
+            };
+            
+            const switchDay = (day) => {
+                document.querySelectorAll('.day-schedule').forEach(el => el.style.display = 'none');
+                const dayEl = document.querySelector(`.day-schedule[data-day="${day}"]`);
+                if(dayEl) dayEl.style.display = 'block';
+
+                document.querySelectorAll('.day-btn').forEach(btn => btn.classList.remove('active'));
+                const btnEl = document.querySelector(`.day-btn[data-day="${day}"]`);
+                if(btnEl) btnEl.classList.add('active');
+                
+                updateTimeIndicator();
+            };
+
+            const openTaskModal = (day, index = null) => {
+                taskForm.reset();
+                document.getElementById('task-day').value = day;
+                const goalSelect = document.getElementById('task-goal-link');
+                goalSelect.innerHTML = '<option value="">None</option>' + weeklyGoals.map(g => `<option value="${g.id}">${g.text}</option>`).join('');
+
+                if (index !== null) {
+                    modalTitle.textContent = 'Edit Task';
+                    const task = scheduleData[day][index];
+                    document.getElementById('task-id').value = index;
+                    document.getElementById('task-input').value = task.task;
+                    const [start, end] = task.time.split(' - ');
+                    document.getElementById('start-time-input').value = timeTo24Hour(start);
+                    document.getElementById('end-time-input').value = timeTo24Hour(end);
+                    goalSelect.value = task.goalId || "";
+                    document.getElementById('delete-task-btn').style.display = 'inline-block';
+                } else {
+                    modalTitle.textContent = 'Add Task';
+                    document.getElementById('task-id').value = '';
+                    document.getElementById('delete-task-btn').style.display = 'none';
+                }
+                taskModal.style.display = 'block';
+            };
+
+            const closeTaskModal = () => {
+                taskModal.style.display = 'none';
+            };
+            
+            const timeTo24Hour = (timeStr) => {
+                if (!timeStr) return '';
+                const [time, modifier] = timeStr.trim().split(' ');
+                let [hours, minutes] = time.split(':').map(Number);
+                if (modifier === 'PM' && hours < 12) hours += 12;
+                if (modifier === 'AM' && hours === 12) hours = 0;
+                return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+            };
+
+            const showAnalytics = () => {
+                const allTasks = Object.values(scheduleData).flat();
+                const completedTasks = allTasks.filter(t => t.completed);
+                const completionRate = allTasks.length > 0 ? (completedTasks.length / allTasks.length * 100).toFixed(1) : 0;
+                document.getElementById('overall-completion').textContent = `${completionRate}%`;
+
+                // Time Distribution
+                const timeByCategory = allTasks.reduce((acc, task) => {
+                    const [start, end] = task.time.split(' - ');
+                    if (!start || !end) return acc; // Skip tasks without a valid time range
+                    const duration = (timeToMinutes(end) - timeToMinutes(start)) / 60;
+                    if (duration < 0) return acc; // Skip invalid ranges
+                    
+                    const category = task.task.toLowerCase().includes('study') || task.task.toLowerCase().includes('dsa') ? 'Studies' :
+                                   task.task.toLowerCase().includes('class') ? 'Classes' :
+                                   task.task.toLowerCase().includes('gym') ? 'Gym' : 'Other';
+                    acc[category] = (acc[category] || 0) + duration;
+                    return acc;
+                }, {});
+
+                const timeCtx = document.getElementById('time-distribution-chart').getContext('2d');
+                if(window.timeDistChart) window.timeDistChart.destroy();
+                window.timeDistChart = new Chart(timeCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(timeByCategory),
+                        datasets: [{
+                            data: Object.values(timeByCategory),
+                            backgroundColor: ['#3b82f6', '#8b5cf6', '#f97316', '#6b7280'],
+                        }]
+                    },
+                    options: { responsive: true, plugins: { legend: { position: 'top' } } }
+                });
+
+                // Daily Productivity
+                const dailyProductivity = daysOfWeek.map(day => {
+                    const dayTasks = scheduleData[day] || [];
+                    if (dayTasks.length === 0) return 0;
+                    const completed = dayTasks.filter(t => t.completed).length;
+                    return (completed / dayTasks.length) * 100;
+                });
+                
+                const dailyCtx = document.getElementById('daily-productivity-chart').getContext('2d');
+                if(window.dailyProdChart) window.dailyProdChart.destroy();
+                window.dailyProdChart = new Chart(dailyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: daysOfWeek.map(d => d.charAt(0).toUpperCase() + d.slice(1)),
+                        datasets: [{
+                            label: '% Tasks Completed',
+                            data: dailyProductivity,
+                            backgroundColor: '#14b8a6',
+                        }]
+                    },
+                    options: { scales: { y: { beginAtZero: true, max: 100 } } }
+                });
+
+
+                analyticsModal.style.display = 'block';
+            };
+
+
+            // --- Event Listeners ---
+            scheduleContainerElement.addEventListener('click', (e) => {
+                if (e.target.classList.contains('add-task-btn')) {
+                    openTaskModal(e.target.dataset.day);
+                }
+                const taskDetails = e.target.closest('.task-details');
+                if (taskDetails) {
+                    const taskItem = taskDetails.closest('.task-item');
+                    const { day, index } = taskItem.dataset;
+                    openTaskModal(day, index);
+                }
+            });
+
+            scheduleContainerElement.addEventListener('change', (e) => {
+                if (e.target.classList.contains('task-checkbox')) {
+                    const taskItem = e.target.closest('.task-item');
+                    const { day, index } = taskItem.dataset;
+                    scheduleData[day][index].completed = e.target.checked;
+                    taskItem.classList.toggle('completed', e.target.checked);
+                    saveState();
+                    updateGoalProgress();
+                    updateFocusView();
+                }
+            });
+
+            taskForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const day = document.getElementById('task-day').value;
+                const id = document.getElementById('task-id').value;
+                const startTime = timeInputTo12Hour(document.getElementById('start-time-input').value);
+                const endTime = timeInputTo12Hour(document.getElementById('end-time-input').value);
+
+                const newTask = {
+                    task: document.getElementById('task-input').value,
+                    time: `${startTime} - ${endTime}`,
+                    completed: false,
+                    goalId: parseInt(document.getElementById('task-goal-link').value) || null
+                };
+
+                if (id) { // Editing
+                    const isCompleted = scheduleData[day][id].completed;
+                    newTask.completed = isCompleted;
+                    scheduleData[day][id] = newTask;
+                } else { // Adding
+                    if (!scheduleData[day]) scheduleData[day] = [];
+                    scheduleData[day].push(newTask);
+                }
+                
+                // Sort the array for the affected day
+                scheduleData[day].sort((a, b) => timeToMinutes(a.time.split(' - ')[0]) - timeToMinutes(b.time.split(' - ')[0]));
+
+                saveState();
+                renderAllSchedules();
+                switchDay(day);
+                closeTaskModal();
+                updateFocusView();
+            });
+
+            document.getElementById('cancel-task-btn').addEventListener('click', closeTaskModal);
+            document.getElementById('delete-task-btn').addEventListener('click', () => {
+                const day = document.getElementById('task-day').value;
+                const id = document.getElementById('task-id').value;
+                if (confirm('Are you sure you want to delete this task?')) {
+                    scheduleData[day].splice(id, 1);
+                    saveState();
+                    renderAllSchedules();
+                    switchDay(day);
+                    closeTaskModal();
+                    updateFocusView();
+                }
+            });
+
+            daySwitcherElement.addEventListener('click', (e) => {
+                if (e.target.classList.contains('day-btn')) {
+                    switchDay(e.target.dataset.day);
+                }
+            });
+
+            // Goal Event Listeners
+            document.getElementById('add-goal-btn').addEventListener('click', () => {
+                const newGoalText = prompt("Enter your new weekly goal:");
+                if (newGoalText) {
+                    weeklyGoals.push({ id: Date.now(), text: newGoalText, completed: false });
+                    saveState();
+                    renderGoals();
+                }
+            });
+
+            weeklyGoalsList.addEventListener('change', (e) => {
+                if (e.target.classList.contains('goal-checkbox')) {
+                    const goal = weeklyGoals.find(g => g.id == e.target.dataset.id);
+                    if (goal) {
+                        goal.completed = e.target.checked;
+                        saveState();
+                    }
+                }
+            });
+            
+            weeklyGoalsList.addEventListener('input', (e) => {
+                 if (e.target.classList.contains('goal-text-input')) {
+                    const goal = weeklyGoals.find(g => g.id == e.target.dataset.id);
+                    if (goal) {
+                        goal.text = e.target.value;
+                        saveState();
+                    }
+                }
+            });
+
+            weeklyGoalsList.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-goal-btn')) {
+                    if (confirm('Are you sure you want to delete this goal?')) {
+                        weeklyGoals = weeklyGoals.filter(g => g.id != e.target.dataset.id);
+                        // Also unlink tasks
+                        Object.keys(scheduleData).forEach(day => {
+                            if(scheduleData[day]) {
+                                scheduleData[day].forEach(task => {
+                                    if (task.goalId == e.target.dataset.id) {
+                                        task.goalId = null;
+                                    }
+                                });
+                            }
+                        });
+                        saveState();
+                        renderGoals();
+                        renderAllSchedules();
+                        const currentDay = document.querySelector('.day-btn.active')?.dataset.day || daysOfWeek[new Date().getDay()];
+                        switchDay(currentDay);
+                    }
+                }
+            });
+
+            // Analytics Modal Listeners
+            document.getElementById('show-analytics-btn').addEventListener('click', showAnalytics);
+            document.getElementById('close-analytics-btn').addEventListener('click', () => {
+                analyticsModal.style.display = 'none';
+            });
+
+            // --- Initialization ---
+            renderAll();
+            updateDateTime();
+            setInterval(updateDateTime, 1000 * 60);
+            setInterval(updateTimeIndicator, 1000 * 10);
+            setInterval(updateFocusView, 1000 * 10);
+        });
+    </script>
+</body>
+</html>
